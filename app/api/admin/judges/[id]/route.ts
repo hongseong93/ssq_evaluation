@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { updateJudge } from "@/lib/server/db";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;

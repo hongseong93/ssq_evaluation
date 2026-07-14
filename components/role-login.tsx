@@ -16,14 +16,12 @@ const demoAccounts = {
     label: "관리자",
     email: "admin@shinsegaeawards.kr",
     password: "password",
-    destination: "/admin/dashboard",
     helper: "출품작, 심사위원, 배정, 점수표를 관리합니다."
   },
   judge: {
     label: "심사위원",
     email: "hong@jury.kr",
     password: "password",
-    destination: "/judge/evaluation",
     helper: "배정된 출품작을 보고 항목별 평가를 진행합니다."
   }
 } as const;
@@ -33,6 +31,8 @@ export function RoleLogin({ initialRole = "admin" }: RoleLoginProps) {
   const [role, setRole] = useState<LoginRole>(initialRole);
   const [email, setEmail] = useState<string>(demoAccounts[initialRole].email);
   const [password, setPassword] = useState<string>(demoAccounts[initialRole].password);
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const account = useMemo(() => demoAccounts[role], [role]);
 
@@ -40,13 +40,30 @@ export function RoleLogin({ initialRole = "admin" }: RoleLoginProps) {
     setRole(nextRole);
     setEmail(demoAccounts[nextRole].email);
     setPassword(demoAccounts[nextRole].password);
+    setError("");
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    window.localStorage.setItem("review-system-role", role);
-    window.localStorage.setItem("review-system-email", email);
-    router.push(account.destination);
+    setError("");
+    setIsSubmitting(true);
+
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, role })
+    });
+
+    const result = await response.json();
+    setIsSubmitting(false);
+
+    if (!response.ok) {
+      setError(result.message || "로그인에 실패했습니다.");
+      return;
+    }
+
+    window.localStorage.setItem("review-system-user", JSON.stringify(result.user));
+    router.push(result.user.role === "admin" ? "/admin/dashboard" : "/judge/evaluation");
   }
 
   return (
@@ -60,7 +77,7 @@ export function RoleLogin({ initialRole = "admin" }: RoleLoginProps) {
         <div className="mt-8">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-gold">Review System</p>
           <h1 className="mt-2 text-3xl font-bold text-navy-900">신세계스퀘어 미디어아트 어워즈</h1>
-          <p className="mt-2 text-sm text-slate-600">하나의 로그인 화면에서 역할을 선택하면 해당 페이지로 이동합니다.</p>
+          <p className="mt-2 text-sm text-slate-600">하나의 서버와 DB에서 로그인 권한에 따라 페이지를 분기합니다.</p>
         </div>
 
         <div className="mt-7 grid gap-3 sm:grid-cols-2">
@@ -97,8 +114,9 @@ export function RoleLogin({ initialRole = "admin" }: RoleLoginProps) {
               <TextInput className="pl-10" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
             </div>
           </Field>
-          <Button type="submit" className="w-full">
-            {account.label} 페이지로 이동
+          {error ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p> : null}
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? "로그인 중..." : `${account.label} 페이지로 이동`}
           </Button>
         </form>
 
