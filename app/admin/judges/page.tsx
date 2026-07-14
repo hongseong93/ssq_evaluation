@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Edit3, KeyRound, Plus, RotateCcw, Save, X } from "lucide-react";
 import { AdminShell, Badge, Button, Card, DataTable, Field, TextInput } from "@/components/ui";
-import { divisionLabels, judges as initialJudges } from "@/lib/data";
+import { divisionLabels } from "@/lib/data";
 import { judgeProgress } from "@/lib/scoring";
 import type { Judge } from "@/lib/types";
 
@@ -30,12 +30,26 @@ const emptyForm: JudgeForm = {
 };
 
 export default function JudgesPage() {
-  const [judges, setJudges] = useState<Judge[]>(initialJudges);
+  const [judges, setJudges] = useState<Judge[]>([]);
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<JudgeForm>(emptyForm);
+  const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
   const selectedJudge = useMemo(() => judges.find((judge) => judge.id === editingId), [editingId, judges]);
+
+  useEffect(() => {
+    loadJudges();
+  }, []);
+
+  async function loadJudges() {
+    setIsLoading(true);
+    const response = await fetch("/api/admin/judges");
+    const result = await response.json();
+    setJudges(result.judges || []);
+    setIsLoading(false);
+  }
 
   function updateForm<K extends keyof JudgeForm>(key: K, value: JudgeForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -44,6 +58,7 @@ export default function JudgesPage() {
   function startEdit(judge: Judge) {
     setMode("edit");
     setEditingId(judge.id);
+    setMessage("");
     setForm({
       name: judge.name,
       email: judge.email,
@@ -60,41 +75,29 @@ export default function JudgesPage() {
     setMode("create");
     setEditingId(null);
     setForm(emptyForm);
+    setMessage("");
   }
 
-  function saveJudge() {
-    if (mode === "edit" && editingId) {
-      setJudges((current) =>
-        current.map((judge) =>
-          judge.id === editingId
-            ? {
-                ...judge,
-                name: form.name,
-                email: form.email,
-                organization: form.organization,
-                position: form.position,
-                phone: form.phone,
-                division: form.division,
-                isActive: form.isActive
-              }
-            : judge
-        )
-      );
-    } else {
-      const nextJudge: Judge = {
-        id: `j-${String(judges.length + 1).padStart(3, "0")}`,
-        name: form.name || "신규 심사위원",
-        email: form.email || "new@jury.kr",
-        organization: form.organization,
-        position: form.position,
-        phone: form.phone,
-        division: form.division,
-        isActive: form.isActive,
-        lastSeen: "-"
-      };
-      setJudges((current) => [...current, nextJudge]);
+  async function saveJudge() {
+    setMessage("");
+    const url = mode === "edit" && editingId ? `/api/admin/judges/${editingId}` : "/api/admin/judges";
+    const method = mode === "edit" ? "PUT" : "POST";
+
+    const response = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form)
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      setMessage(result.message || "저장에 실패했습니다.");
+      return;
     }
-    resetForm();
+
+    setMessage(mode === "edit" ? "수정 내용이 DB에 저장되었습니다." : "새 심사위원이 DB에 저장되었습니다.");
+    await loadJudges();
+    if (mode === "create") setForm(emptyForm);
   }
 
   function resetPassword() {
@@ -105,25 +108,29 @@ export default function JudgesPage() {
     <AdminShell title="심사위원 관리">
       <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
         <Card className="overflow-hidden">
-          <DataTable
-            headers={["이름", "이메일", "소속", "담당 부문", "배정", "완료", "상태", "마지막 접속", "관리"]}
-            rows={judges.map((judge) => {
-              const progress = judgeProgress(judge.id);
-              return [
-                judge.name,
-                judge.email,
-                `${judge.organization} / ${judge.position}`,
-                <Badge key="division">{divisionLabels[judge.division]}</Badge>,
-                progress.assigned,
-                `${progress.completed + progress.submitted} / ${progress.assigned}`,
-                <Badge key="active" tone={judge.isActive ? "green" : "gray"}>{judge.isActive ? "활성" : "비활성"}</Badge>,
-                judge.lastSeen,
-                <Button key="edit" variant="secondary" className="h-9 gap-2 px-3" onClick={() => startEdit(judge)}>
-                  <Edit3 size={15} /> 수정
-                </Button>
-              ];
-            })}
-          />
+          {isLoading ? (
+            <div className="p-5 text-sm font-semibold text-slate-500">DB에서 심사위원 목록을 불러오는 중...</div>
+          ) : (
+            <DataTable
+              headers={["이름", "이메일", "소속", "담당 부문", "배정", "완료", "상태", "마지막 접속", "관리"]}
+              rows={judges.map((judge) => {
+                const progress = judgeProgress(judge.id);
+                return [
+                  judge.name,
+                  judge.email,
+                  `${judge.organization} / ${judge.position}`,
+                  <Badge key="division">{divisionLabels[judge.division]}</Badge>,
+                  progress.assigned,
+                  `${progress.completed + progress.submitted} / ${progress.assigned}`,
+                  <Badge key="active" tone={judge.isActive ? "green" : "gray"}>{judge.isActive ? "활성" : "비활성"}</Badge>,
+                  judge.lastSeen,
+                  <Button key="edit" variant="secondary" className="h-9 gap-2 px-3" onClick={() => startEdit(judge)}>
+                    <Edit3 size={15} /> 수정
+                  </Button>
+                ];
+              })}
+            />
+          )}
         </Card>
 
         <Card className="p-5">
@@ -185,6 +192,8 @@ export default function JudgesPage() {
               계정 활성화
               <input type="checkbox" checked={form.isActive} onChange={(event) => updateForm("isActive", event.target.checked)} className="h-4 w-4 accent-navy-900" />
             </label>
+
+            {message ? <p className="rounded-md bg-navy-50 px-3 py-2 text-sm font-semibold text-navy-700">{message}</p> : null}
 
             <Button className="w-full gap-2" onClick={saveJudge}>
               {mode === "edit" ? <Save size={16} /> : <Plus size={16} />}

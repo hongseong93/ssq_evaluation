@@ -1,5 +1,22 @@
 export type Division = "template" | "original";
 export type AssignmentStatus = "not_started" | "draft" | "completed" | "submitted";
+export type UserRole = "admin" | "judge";
+
+export type User = {
+  id: string;
+  email: string;
+  passwordHash: string;
+  name: string;
+  role: UserRole;
+  organization: string;
+  position: string;
+  phone: string;
+  division: Division | "all";
+  isActive: boolean;
+  lastSeen: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type Submission = {
   id: string;
@@ -51,4 +68,3 @@ export type ScoreEntry = {
   questionScores: number[];
   note: string;
 };
-
