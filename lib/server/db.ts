@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { createHash, randomUUID } from "crypto";
+import { get, put } from "@vercel/blob";
 import type { Division, Judge, User } from "@/lib/types";
 
 type Database = {
@@ -19,17 +20,57 @@ type JudgeInput = {
 };
 
 const dbPath = path.join(process.cwd(), "data", "db.json");
+const blobPath = "ssq-evaluation/database.json";
 
 export function hashPassword(password: string) {
   return createHash("sha256").update(password).digest("hex");
 }
 
-async function readDb(): Promise<Database> {
+function usesBlobStorage() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+async function readLocalDb(): Promise<Database> {
   const raw = await fs.readFile(dbPath, "utf-8");
   return JSON.parse(raw.replace(/^\uFEFF/, "")) as Database;
 }
 
+async function readBlobDb(): Promise<Database> {
+  const stored = await get(blobPath, { access: "private", useCache: false });
+
+  if (!stored) {
+    const seed = await readLocalDb();
+    await writeBlobDb(seed);
+    return seed;
+  }
+
+  const raw = await new Response(stored.stream).text();
+  return JSON.parse(raw) as Database;
+}
+
+async function readDb(): Promise<Database> {
+  return usesBlobStorage() ? readBlobDb() : readLocalDb();
+}
+
+async function writeBlobDb(db: Database) {
+  await put(blobPath, JSON.stringify(db), {
+    access: "private",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "application/json"
+  });
+}
+
 async function writeDb(db: Database) {
+  if (usesBlobStorage()) {
+    await writeBlobDb(db);
+    return;
+  }
+
+  if (process.env.VERCEL) {
+    throw new Error("영구 저장소가 연결되지 않았습니다. Vercel Blob을 연결한 뒤 다시 시도해 주세요.");
+  }
+
   await fs.mkdir(path.dirname(dbPath), { recursive: true });
   await fs.writeFile(dbPath, JSON.stringify(db, null, 2), "utf-8");
 }

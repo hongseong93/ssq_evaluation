@@ -14,6 +14,9 @@ export async function POST(request: Request) {
     const judge = await createJudge(body);
     return NextResponse.json({ judge }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ message: error instanceof Error ? error.message : "심사위원 생성에 실패했습니다." }, { status: 400 });
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "심사위원 생성에 실패했습니다." },
+      { status: 400 }
+    );
   }
 }

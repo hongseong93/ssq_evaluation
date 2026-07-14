@@ -16,6 +16,9 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
     return NextResponse.json({ judge });
   } catch (error) {
-    return NextResponse.json({ message: error instanceof Error ? error.message : "심사위원 수정에 실패했습니다." }, { status: 400 });
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "심사위원 수정에 실패했습니다." },
+      { status: 400 }
+    );
   }
 }
